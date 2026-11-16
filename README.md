@@ -193,7 +193,7 @@ pip install -r requirements.txt
 See [`notebooks/01_explore_data.ipynb`](notebooks/) — it runs top to bottom and recreates the cleaned
 dataset, both indexes and the evaluation.
 
-<!-- TODO: add the "Open in Colab" badge -->
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Gunnny/dream-atlas/blob/main/notebooks/01_explore_data.ipynb)
 
 Raw data is not committed; the notebook downloads it.
 
