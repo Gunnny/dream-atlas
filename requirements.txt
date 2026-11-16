@@ -1,0 +1,6 @@
+datasets
+pandas
+pyarrow
+scikit-learn
+sentence-transformers
+matplotlib
