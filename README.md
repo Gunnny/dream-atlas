@@ -2,9 +2,10 @@
 
 An interactive atlas of dream reports — find the dreams of strangers that resemble your own.
 
-> **Status:** work in progress. Retrieval and evaluation are done (M0–M2); the web interface is next.
+![Suche](screenshot_demo1.png)
 
-<!-- TODO: screenshot or GIF of the app goes here, above everything else, once M4 is built -->
+![Atlas](website_demo2.png)
+**[Live demo]()** <!-- TODO: Hugging Face Space URL -->
 
 ---
 
@@ -12,9 +13,14 @@ An interactive atlas of dream reports — find the dreams of strangers that rese
 
 A semantic search engine over 22,096 real dream reports from the [DreamBank](https://dreambank.net/) corpus.
 You describe a dream — in English **or German** — and get back the dreams from the archive that are
-closest in meaning, not in wording.
+closest in meaning, not in wording. Every result is placed on a map of the whole corpus.
 
 The interesting part is not that it works. It is **by how much**, and where it fails.
+
+> **Content note.** The archive contains real dream reports, including accounts of violence,
+> sexual assault and death. Search results are not filtered, because filtering them would remove
+> a substantial part of what people actually dream about and silently bias any analysis built on
+> the corpus. The interface warns the user instead.
 
 ---
 
@@ -171,22 +177,70 @@ is large.
 
 ---
 
+## The atlas
+
+The map in the interface is a UMAP projection of the same 384-dimensional embeddings, with
+k-means regions drawn on top.
+
+**Clustering runs in the original 384 dimensions, not on the 2-D projection.** UMAP distorts
+distances to produce a readable picture; clustering the picture would cluster the distortion.
+The projection is used for display only.
+
+### Region labels are hand-written, and that mattered
+
+Each cluster's most characteristic TF-IDF terms were computed as a starting point. For roughly
+half the regions those terms name the region well (*water, boat, swimming, lake* → **Water**).
+For the other half they do not, because the most frequent words in a cluster are not necessarily
+what the cluster has in common.
+
+The clearest case: one region's top terms were *saw, man, came, got, went, away* — generic
+narrative verbs that appear in every long report. On that evidence the cluster looks like noise.
+Reading fifteen of its documents suggested otherwise: hell, a hostage-taking, a medieval dungeon,
+a bomb, a sword fight, machine-gun fire, a room full of snakes, a bird with a rat's face.
+
+That observation was turned into a prediction and measured. Share of reports containing any of
+a fixed list of threat and weapon terms:
+
+| | Share |
+|---|---|
+| This cluster | **46.8 %** |
+| Whole corpus | 19.3 % |
+
+A factor of 2.4. The region is labelled **Threat & the fantastic**, and the label is backed by a
+number rather than by an impression.
+
+The same reasoning produced the label for the spoken-language cluster described above: it is
+named **orally told dreams**, which states the collection artefact on the map instead of hiding
+it behind filler words.
+
+Top-term labelling is therefore treated here as a *starting point for reading*, not as a result.
+Where a cluster resists naming after reading, the honest label is *mixed*.
+
+---
+
 ## Method
 
 ```
-OFFLINE (once)
-  DreamBank  →  clean  →  embed all reports  →  matrix on disk
+OFFLINE (once, in the notebook)
+  DreamBank → clean → embed all reports → UMAP → k-means
+            → dreams.parquet, embeddings.npy, atlas_xy.npy,
+              clusters.npy, cluster_names.json
 
-AT QUERY TIME
-  user text  →  one embedding  →  dot product against the matrix  →  top-k
+AT QUERY TIME (in the app)
+  user text → one embedding → dot product against the matrix → top-k
 ```
 
 The expensive step runs once; each search is a single matrix–vector product over 22,096 rows.
+The app loads the precomputed artefacts and never recomputes them — it holds no training code at all.
 
 - **Embedding model:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions,
   L2-normalised, so cosine similarity reduces to a dot product.
 - **Baseline:** scikit-learn `TfidfVectorizer`, English stop words, `min_df=2`, 24,119-term vocabulary.
   The document–term matrix has 539 M cells but only 0.22 % are non-zero (9.5 MB sparse vs. 4.3 GB dense).
+- **Projection:** UMAP to 2 dimensions, for display only.
+- **Clustering:** k-means, k = 12, on the 384-dimensional vectors.
+- **Interface:** Gradio, with the map as a Plotly scatter. The map is drawn from a fixed random
+  subsample of 7,000 points; sending all 22,096 produced a payload the browser failed to render.
 
 ---
 
@@ -278,6 +332,9 @@ The full gold standard is in [`judgements_v2.csv`](judgements_v2.csv).
 - **Most labels are not human.** 172 of 213 relevance judgements come from a language model;
   the κ above is what makes them usable, not a guarantee that they are right.
 - **20 queries is small.** Differences of a few points are not meaningful at this sample size.
+- **The number of regions is a choice, not a finding.** k = 12 was set by hand. No stability
+  analysis was run, so the regions should be read as a readable summary of the corpus, not as
+  evidence that dreams fall into twelve kinds.
 - **The corpus is historical.** Many reports date from the mid-20th century, so modern topics are
   sparsely covered.
 - **English archive.** German queries work through cross-lingual embeddings, but every stored
@@ -287,11 +344,13 @@ The full gold standard is in [`judgements_v2.csv`](judgements_v2.csv).
 
 ## Next steps
 
-- [ ] Interactive atlas: UMAP projection with labelled clusters
-- [ ] Web interface (Gradio) and public deployment
+- [x] Interactive atlas: UMAP projection with labelled clusters
+- [x] Web interface (Gradio) and public deployment
 - [ ] Hybrid retrieval: combine the lexical and semantic scores, since each wins where the other loses
+- [ ] Let visitors save their own dreams and see them placed on the map
 - [ ] Emotion annotation following the Hall & Van de Castle scheme
 - [ ] Strip titles glued to the start of the text, and bracketed waking-life notes
+- [ ] Cluster stability analysis to justify a value for k
 
 ---
 
@@ -302,11 +361,17 @@ pip install -r requirements.txt
 ```
 
 See [`notebooks/01_explore_data.ipynb`](notebooks/) — it runs top to bottom and recreates the cleaned
-dataset, both indexes and the evaluation.
+dataset, both indexes, the evaluation and the atlas artefacts.
 
 <!-- TODO: add the "Open in Colab" badge -->
 
-Raw data is not committed; the notebook downloads it.
+Raw data is not committed; the notebook downloads it. The precomputed artefacts
+(`embeddings.npy` and friends, ≈34 MB) are not committed either — run the notebook to produce them,
+then start the interface with:
+
+```bash
+python app.py
+```
 
 ---
 
