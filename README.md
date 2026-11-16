@@ -63,26 +63,36 @@ Across the whole gold set, **11.3 % of all relevant documents are shorter than 2
 A hard length cutoff therefore trades away true positives to suppress noisy short matches.
 It is not a free improvement, and this evaluation cannot show that it is an improvement at all.
 
-### Cross-lingual retrieval costs almost nothing
-
-Every report in the archive is in English. Query it in German and the results are just as good:
-
+### Cross-lingual retrieval works — on average
+ 
+Every report in the archive is in English. Query it in German and the results are, in aggregate,
+just as good:
+ 
 | Query language | Queries | P@5 |
 |---|---|---|
 | German | 8 | 0.550 |
 | English | 12 | 0.567 |
-
-A gap of 1.7 points. The multilingual model places a German description of a dream in
-essentially the same region of the vector space as its English equivalent, so a user can write
-in their own language and still search an English corpus.
-
-Note that these are *different* queries on different topics, so this is not a controlled
-comparison.
-
-<!-- TODO: add the controlled test — the three matched query pairs (zaehne, fliegen, spaet),
-     where the same dream is described in both languages. That isolates the language effect. -->
-
----
+ 
+Those are different queries on different topics, so the set also contains three **matched pairs**:
+the same dream described in both languages, everything else held constant.
+ 
+| Pair | German | English | shared results |
+|---|---|---|---|
+| teeth falling out | 1.0 | 1.0 | 3 of 5 |
+| flying over a city | 0.6 | 0.8 | 4 of 5 |
+| late for an exam | **0.8** | **0.2** | **0 of 5** |
+ 
+Two pairs behave as hoped. The third does not — the result lists are completely disjoint.
+ 
+The cause is not the language itself but the **word choice that translation forces**. In
+`...could not find the room`, the English *room* dominated the query: four of five results were
+hotel rooms, dorm rooms and student rooms, and none involved an exam. In the German version
+*Prüfung* dominated instead. *Room* is a dense, high-frequency setting word in an English dream
+corpus; *Raum* is not its exact equivalent.
+ 
+Translated query pairs are therefore only partly controlled, since translation involves lexical
+decisions and those decisions drive retrieval. The aggregate figures hold, but per-query variance
+is large.
 
 ## Method
 
@@ -161,10 +171,16 @@ The full gold standard is in [`judgements_final.csv`](judgements_final.csv).
 ---
 
 ## Limitations
-
-- **Gist, not events.** Embeddings capture the overall impression. For *"being chased through a dark
-  house"*, the model reliably returns threatening night-time house scenes, but only some of them
-  involve an actual chase. TF-IDF was better at pinning down the specific word.
+ 
+- **Concrete settings outrank abstract events.** Given a query with several components, the model
+  latches onto the physical scene rather than onto what happens in it. Two independent cases from
+  the evaluation:
+  | Query | What comes back | What is missing |
+  |---|---|---|
+  | *being chased through a **dark house*** | dark, threatening houses | the chase, in most results |
+  | *late for an exam, could not find the **room*** | hotel and dorm rooms | the exam, in all five results |
+  TF-IDF does not share this failure: it insists on *chased* and on *exam*. Each method wins where
+  the other loses, which is the strongest argument for the hybrid retrieval listed under next steps.
 - **Most labels are not human.** 172 of 213 relevance judgements come from a language model;
   the κ above is what makes them usable, not a guarantee that they are right.
 - **20 queries is small.** Differences of a few points are not meaningful at this sample size.
