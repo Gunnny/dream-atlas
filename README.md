@@ -100,8 +100,43 @@ it only strips a phrase at the start of a report, and only when the words betwee
 ships with its own test cases.
 
 The cleaning reaches about half the problem: 7.8 % of reports were changed, while the framing
-cluster held 17 %. The remainder uses framing language mid-text, which an anchored rule cannot
-reach without risking real content.
+cluster held 17 %.
+
+### What is left of that cluster is a collection artefact
+
+Re-clustering the cleaned embeddings leaves a group of 2,403 reports (11 %) whose characteristic
+terms are *dream, like, remember, just, going, don't, know, kind*.
+
+Most of those are not topic words but **spoken-language fillers**. These reports read like
+transcribed speech rather than writing:
+
+> *"Understandably this is the night before exams, so I had an exam dream last night. I dreamt
+> that I was going to school… And then I dilly-dallied around and I was real late, and I don't
+> remember anything about how that went. But then…"*
+
+The distribution across sub-collections confirms it. Share of each series that falls into this
+cluster, for series with at least 100 reports:
+
+| Series | Share | Reports |
+|---|---|---|
+| jasmine3 | 65 % | 258 |
+| jasmine2 | 50 % | 269 |
+| miami-lab | 46 % | 274 |
+| melvin | 41 % | 128 |
+| peru-f | 35 % | 381 |
+| … | | |
+| b | 4 % | 2,845 |
+| alta | 0.2 % | 422 |
+
+A factor of 300 between the extremes. The series names — `miami-lab` / `miami-home`,
+`peru-f` / `peru-m`, `blind-m`, `hall_female` — are study collectives, not individual journals,
+so different studies gathered their reports in different ways. `jasmine2` and `jasmine3` are the
+same person in two periods and both rank at the top, so individual narrative style contributes too.
+
+**This is deliberately not fixed.** Catching framing language mid-report would mean removing
+*dream* and *remember* anywhere in the text, which would destroy lucid dreams, dreams within
+dreams and references to earlier dreams — all genuine phenomena in dream research. The artefact
+is documented rather than removed.
 
 ### Cross-lingual retrieval works — on average
 
@@ -181,7 +216,7 @@ Framing phrases are stripped before embedding — see the Results section and [`
 **Known issues not yet addressed:**
 - Titles are glued to the start of the text in some series (`'Blisters On My Face  I have blisters...'`)
 - Bracketed waking-life notes are mixed into the text (`'[Note: I got sunburn yesterday on my face.]'`)
-- Framing language that appears mid-report rather than at the start
+- Framing language mid-report — documented above, deliberately left in place
 
 ---
 
@@ -255,7 +290,6 @@ The full gold standard is in [`judgements_v2.csv`](judgements_v2.csv).
 - [ ] Interactive atlas: UMAP projection with labelled clusters
 - [ ] Web interface (Gradio) and public deployment
 - [ ] Hybrid retrieval: combine the lexical and semantic scores, since each wins where the other loses
-- [ ] Reach framing language that appears mid-report, not just at the start
 - [ ] Emotion annotation following the Hall & Van de Castle scheme
 - [ ] Strip titles glued to the start of the text, and bracketed waking-life notes
 
