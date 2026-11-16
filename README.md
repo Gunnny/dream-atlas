@@ -2,7 +2,7 @@
 
 An interactive atlas of dream reports — find the dreams of strangers that resemble your own.
 
-![Suche](screenshot_demo1.png)
+![Suche](website_demo1.png)
 
 ![Atlas](website_demo2.png)
 **[Live demo]()** <!-- TODO: Hugging Face Space URL -->
