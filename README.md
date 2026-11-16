@@ -22,13 +22,17 @@ The interesting part is not that it works. It is **by how much**, and where it f
 
 Precision@5 over a hand-built evaluation set of 20 queries:
 
-| Method | P@5 | vs. baseline |
-|---|---|---|
-| TF-IDF (lexical baseline) | 0.360 | — |
-| Multilingual sentence embeddings | **0.560** | **+20 points (+56 %)** |
-| Embeddings + minimum-length filter | 0.580 | +22 points (+61 %) |
+| Method | P@5 |
+|---|---|
+| TF-IDF (lexical baseline) | 0.360 |
+| Multilingual sentence embeddings | 0.560 |
+| Embeddings, minimum-length filter | 0.580 |
+| Embeddings, framing phrases removed | **0.600** |
 
-In plain terms: the lexical baseline returns 1.8 useful results out of 5, the embedding model 2.8.
+The last two rows are independent variants, not stacked on each other.
+
+In plain terms: the lexical baseline returns 1.8 useful results out of 5, the best
+embedding setup 3.0.
 
 ### Why embeddings win
 
@@ -63,36 +67,74 @@ Across the whole gold set, **11.3 % of all relevant documents are shorter than 2
 A hard length cutoff therefore trades away true positives to suppress noisy short matches.
 It is not a free improvement, and this evaluation cannot show that it is an improvement at all.
 
+### The strongest signal in the embeddings was not a topic
+
+Projecting the embeddings to two dimensions with PCA produces an undifferentiated cloud:
+the first two components capture 9.4 % of the variance and separate **nothing** useful.
+Colouring the retrieved results for *teeth*, *flying* and *chase* onto that projection shows
+all three topics fully intermixed.
+
+Three hypotheses were tested for what the leading component does encode:
+
+| Hypothesis | Verdict |
+|---|---|
+| Topic | rejected — the three topics overlap completely |
+| Report length | rejected — no gradient along either axis |
+| **Narrative framing** | **confirmed** |
+
+Reading the documents at both extremes of the first component shows the split: one end holds
+reports that open with a framing phrase (*"I dreamed that…"*, *"Last night I had a bizarre
+dream."*), the other end reports that start straight in the scene. K-means run independently on
+the same embeddings confirmed it — its **largest** cluster (3,726 of 22,096 reports, 17 %) was
+characterised by the terms *dream, dreamt, dreamed, remember* rather than by any topic.
+
+This is a corpus artefact: the sub-collections were gathered under different instructions, so
+some participants habitually wrote *"I dreamed that…"* and others did not. It is not a property
+of what people dream about.
+
+**Removing those phrases raised P@5 from 0.560 to 0.600.** The rule is deliberately conservative:
+it only strips a phrase at the start of a report, and only when the words between *"I had"* and
+*"dream"* come from a list of content-free qualifiers. *"I had a bizarre dream"* is stripped;
+*"I had some sort of sex dream"* is left untouched, because *sex* is the topic. Lucid dreams
+(*"I was dreaming inside my dream"*) are never touched. See [`framing.py`](framing.py), which
+ships with its own test cases.
+
+The cleaning reaches about half the problem: 7.8 % of reports were changed, while the framing
+cluster held 17 %. The remainder uses framing language mid-text, which an anchored rule cannot
+reach without risking real content.
+
 ### Cross-lingual retrieval works — on average
- 
+
 Every report in the archive is in English. Query it in German and the results are, in aggregate,
 just as good:
- 
+
 | Query language | Queries | P@5 |
 |---|---|---|
 | German | 8 | 0.550 |
 | English | 12 | 0.567 |
- 
+
 Those are different queries on different topics, so the set also contains three **matched pairs**:
 the same dream described in both languages, everything else held constant.
- 
+
 | Pair | German | English | shared results |
 |---|---|---|---|
 | teeth falling out | 1.0 | 1.0 | 3 of 5 |
 | flying over a city | 0.6 | 0.8 | 4 of 5 |
 | late for an exam | **0.8** | **0.2** | **0 of 5** |
- 
+
 Two pairs behave as hoped. The third does not — the result lists are completely disjoint.
- 
+
 The cause is not the language itself but the **word choice that translation forces**. In
 `...could not find the room`, the English *room* dominated the query: four of five results were
 hotel rooms, dorm rooms and student rooms, and none involved an exam. In the German version
 *Prüfung* dominated instead. *Room* is a dense, high-frequency setting word in an English dream
 corpus; *Raum* is not its exact equivalent.
- 
+
 Translated query pairs are therefore only partly controlled, since translation involves lexical
 decisions and those decisions drive retrieval. The aggregate figures hold, but per-query variance
 is large.
+
+---
 
 ## Method
 
@@ -134,9 +176,12 @@ Everything above 5 words was kept. Short reports like *"I was in a hospital."* a
 thin; rather than deleting them, a `word_count` column is retained so each use case can filter
 for itself. Deleting rows is irreversible; filtering is not.
 
+Framing phrases are stripped before embedding — see the Results section and [`framing.py`](framing.py).
+
 **Known issues not yet addressed:**
 - Titles are glued to the start of the text in some series (`'Blisters On My Face  I have blisters...'`)
 - Bracketed waking-life notes are mixed into the text (`'[Note: I got sunburn yesterday on my face.]'`)
+- Framing language that appears mid-report rather than at the start
 
 ---
 
@@ -146,6 +191,8 @@ There is no ground truth for "which of 22,096 dreams match this query". It had t
 
 **Pooling.** For each of 20 queries, the top-5 results of all three methods were collected and
 merged, giving 213 unique (query, document) pairs to judge — 97 of which were marked relevant.
+After the framing-phrase cleaning the pool was extended by 13 further pairs (see below), for a
+final gold standard of **226 pairs, 105 relevant**.
 
 **Criterion**, fixed in writing before judging:
 
@@ -166,19 +213,31 @@ the gold standard; κ is reported from the independent pass and was not recomput
 that describe the same dream in both languages. Three queries (`gaming`, `dragons`, `math`) were
 included as expected-hard cases for a corpus collected largely before 2000.
 
-The full gold standard is in [`judgements_final.csv`](judgements_final.csv).
+**Pooling bias, and why it nearly hid a real improvement.** A pool built from one set of methods
+can only judge methods that retrieve similar documents. After the framing cleaning, 13 of 100
+retrieved documents had never been judged and therefore counted as *not relevant* by default,
+putting P@5 at 0.520 — below the 0.560 baseline. Judging those 13 (8 turned out relevant) moved
+the real figure to **0.600**.
+
+The bias was worth 8 points and inverted the sign of the result. Taking 0.520 at face value would
+have meant discarding a change that actually helps. The number of unjudged results is reported
+alongside every evaluation for this reason.
+
+The full gold standard is in [`judgements_v2.csv`](judgements_v2.csv).
 
 ---
 
 ## Limitations
- 
+
 - **Concrete settings outrank abstract events.** Given a query with several components, the model
   latches onto the physical scene rather than onto what happens in it. Two independent cases from
   the evaluation:
+
   | Query | What comes back | What is missing |
   |---|---|---|
   | *being chased through a **dark house*** | dark, threatening houses | the chase, in most results |
   | *late for an exam, could not find the **room*** | hotel and dorm rooms | the exam, in all five results |
+
   TF-IDF does not share this failure: it insists on *chased* and on *exam*. Each method wins where
   the other loses, which is the strongest argument for the hybrid retrieval listed under next steps.
 - **Most labels are not human.** 172 of 213 relevance judgements come from a language model;
@@ -193,10 +252,12 @@ The full gold standard is in [`judgements_final.csv`](judgements_final.csv).
 
 ## Next steps
 
+- [ ] Interactive atlas: UMAP projection with labelled clusters
 - [ ] Web interface (Gradio) and public deployment
-- [ ] Per-language evaluation breakdown
-- [ ] Emotion annotation following the Hall & Van de Castle scheme
 - [ ] Hybrid retrieval: combine the lexical and semantic scores, since each wins where the other loses
+- [ ] Reach framing language that appears mid-report, not just at the start
+- [ ] Emotion annotation following the Hall & Van de Castle scheme
+- [ ] Strip titles glued to the start of the text, and bracketed waking-life notes
 
 ---
 
@@ -209,7 +270,7 @@ pip install -r requirements.txt
 See [`notebooks/01_explore_data.ipynb`](notebooks/) — it runs top to bottom and recreates the cleaned
 dataset, both indexes and the evaluation.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Gunnny/dream-atlas/blob/main/notebooks/01_explore_data.ipynb)
+<!-- TODO: add the "Open in Colab" badge -->
 
 Raw data is not committed; the notebook downloads it.
 
